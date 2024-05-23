@@ -1,0 +1,213 @@
+#provider
+
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+# Configure the AWS Provider
+provider "aws" {
+  region = "us-west-1"
+}
+
+
+
+#EC2
+
+resource "aws_instance" "app_server" {
+  ami           = "ami-0ce2cb35386fce9"
+  instance_type = "t2.micro"
+  count = 1
+  availability_zone = "us-west-1a"
+  subnet_id     = aws_subnet.himani_public_subnet_1.id # specify the subnet ID where instances will be launched
+  key_name      = "himani_key" # specify the SSH key pair name
+  security_groups = [aws_security_group.allow_web.id] # specify the security group(s) for the instance(s)
+
+  tags = {
+    Name = "HIMANI_${count.index + 1}"
+  }
+}
+
+
+
+#security
+
+resource "aws_security_group" "allow_web" {
+  name        = "allow_web"
+  description = "Allow TLS inbound traffic"
+  vpc_id = aws_vpc.himani_vpc.id
+  // Ingress rules (inbound traffic)
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] // allow traffic from anywhere
+  }
+
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] // allow SSH from anywhere
+  }
+
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["171.50.247.221/32"] // allow SSH from myIP
+  }
+  // Egress rules (outbound traffic)
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1" // all protocols
+    cidr_blocks = ["0.0.0.0/0"] // allow traffic to anywhere
+  }
+}
+
+
+
+#vpc
+
+resource "aws_vpc" "himani_vpc" {
+  cidr_block = "55.55.0.0/16" # specify the CIDR block for your VPC
+  enable_dns_support = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = "himani-vpc"
+  }
+}
+
+
+
+#subnets
+
+resource "aws_subnet" "himani_public_subnet_1" {
+  vpc_id            = aws_vpc.himani_vpc.id # specify the ID of the existing VPC
+  cidr_block        = "55.55.1.0/24"  # specify the CIDR block for the subnet
+  availability_zone = "us-west-1a"   # specify the availability zone
+
+  map_public_ip_on_launch = true  # enable auto-assign public IP addresses
+
+  tags = {
+    Name = "himani_public-subnet-1"
+  }
+}
+
+resource "aws_subnet" "himani_public_subnet_2" {
+  vpc_id            = aws_vpc.himani_vpc.id # specify the ID of the existing VPC
+  cidr_block        = "55.55.2.0/24"  # specify the CIDR block for the subnet
+  availability_zone = "us-west-1b"   # specify the availability zone
+
+  map_public_ip_on_launch = true  # enable auto-assign public IP addresses
+
+  tags = {
+    Name = "himani_public-subnet-2"
+  }
+}
+
+resource "aws_subnet" "himani_private_subnet_1" {
+  vpc_id            = aws_vpc.himani_vpc.id # specify the ID of the existing VPC
+  cidr_block        = "55.55.3.0/24"  # specify the CIDR block for the subnet
+  availability_zone = "us-west-1a"   # specify the availability zone
+
+  tags = {
+    Name = "himani_private-subnet-1"
+  }
+}
+
+resource "aws_subnet" "himani_private_subnet_2" {
+  vpc_id            = aws_vpc.himani_vpc.id # specify the ID of the existing VPC
+  cidr_block        = "55.55.4.0/24"  # specify the CIDR block for the subnet
+  availability_zone = "us-west-1b"   # specify the availability zone
+
+  tags = {
+    Name = "himani_private-subnet-2"
+  }
+}
+
+
+
+#routetable
+
+resource "aws_route_table" "public_route_table_1" {
+  vpc_id = aws_vpc.himani_vpc.id # reference to the VPC ID
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.himani-igw.id # reference to the Internet Gateway ID
+  }
+
+  tags = {
+    Name = "HIMANI-rtb-public1-us-west-1a"
+  }
+}
+
+resource "aws_route_table_association" "rts-himani-public1" {
+  subnet_id = aws_subnet.himani_public_subnet_1.id
+  route_table_id = aws_route_table.public_route_table_1.id
+}
+
+resource "aws_route_table" "public_route_table_2" {
+  vpc_id = aws_vpc.himani_vpc.id # reference to the VPC ID
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.himani-igw.id # reference to the Internet Gateway ID
+  }
+
+  tags = {
+    Name = "HIMANI-rtb-public2-us-west-1b"
+  }
+}
+
+resource "aws_route_table_association" "rts-himani-public2" {
+  subnet_id = aws_subnet.himani_public_subnet_2.id
+  route_table_id = aws_route_table.public_route_table_2.id
+}
+
+resource "aws_route_table" "private_route_table_1" {
+  vpc_id = aws_vpc.himani_vpc.id # reference to the VPC ID
+
+  tags = {
+    Name = "HIMANI-rtb-private1-us-west-1a"
+  }
+}
+
+resource "aws_route_table_association" "rts-himani-private1" {
+  subnet_id = aws_subnet.himani_private_subnet_1.id
+  route_table_id = aws_route_table.private_route_table_1.id
+  }
+
+resource "aws_route_table" "private_route_table_2" {
+  vpc_id = aws_vpc.himani_vpc.id # reference to the VPC ID
+
+  tags = {
+    Name = "HIMANI-rtb-private2-us-west-1b"
+  }
+}
+
+resource "aws_route_table_association" "rts-himani-private2" {
+  subnet_id = aws_subnet.himani_private_subnet_2.id
+  route_table_id = aws_route_table.private_route_table_2.id  
+}
+
+
+
+#internet gateway
+
+resource "aws_internet_gateway" "himani-igw" {
+  vpc_id = aws_vpc.himani_vpc.id # reference to the VPC ID
+  tags = {
+    Name = "himani-igw"
+  }
+}
